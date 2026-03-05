@@ -27,8 +27,8 @@
 ## Установка
 1. Клонируйте репозиторий:
 ```bash
-git clone https://github.com/mimimiartartart/MaxToTelegram.git
-cd MaxToTelegram
+git clone https://github.com/mimimiartartart/MaxToTelegramBridge.git
+cd MaxToTelegramBridge
 ```
 2. Создайте виртуальное окружение:
 ```bash
