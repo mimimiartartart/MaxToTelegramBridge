@@ -56,8 +56,6 @@ copy .env.example .env
 - `MAX_TARGET_CHAT_ID`
 - `FORWARD_CHAT_IDS`
 
-Если обязательные переменные не заполнены, приложение завершится с понятной ошибкой.
-
 ## Запуск
 ```bash
 python main.py
@@ -81,17 +79,3 @@ python logger.py
 
 ## Переменные окружения
 Полный список и примеры значений — в `.env.example`.
-
-## Публикация на GitHub
-- Секреты в `.env` не коммитятся (`.gitignore` уже настроен).
-- В репозиторий добавлены только исходники, шаблон настроек и зависимости.
-
-### Быстрый импорт в новый репозиторий
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/<your-user>/<your-repo>.git
-git push -u origin main
-```
