@@ -1,0 +1,17 @@
+.env
+!.env.example
+venv/
+.venv/
+__pycache__/
+*/__pycache__/
+*.pyc
+*.log
+frames.log
+last_active.json
+seen_ids.json
+telegram_outbox.json
+ws_auth.json
+attachments/*
+!attachments/.gitkeep
+.DS_Store
+Thumbs.db
