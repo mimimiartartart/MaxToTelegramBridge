@@ -231,26 +231,63 @@ async def send_to_max_http(runtime: AppRuntime, chat_id: int, text: str, format_
         return False, str(exc)
 
 
-async def request_user_name(runtime: AppRuntime, ws, sender_id) -> str:
+def extract_contact_name(contact: dict | None) -> str | None:
+    if not isinstance(contact, dict):
+        return None
+
+    names = contact.get("names")
+    if isinstance(names, list):
+        for item in names:
+            if not isinstance(item, dict):
+                continue
+            full_name = str(item.get("name") or "").strip()
+            if full_name:
+                return full_name
+
+            first_name = str(item.get("firstName") or "").strip()
+            last_name = str(item.get("lastName") or "").strip()
+            combined = " ".join(part for part in (first_name, last_name) if part).strip()
+            if combined:
+                return combined
+
+    for key in ("name", "title", "displayName"):
+        value = str(contact.get(key) or "").strip()
+        if value:
+            return value
+
+    return None
+
+
+def cache_contact_name(runtime: AppRuntime, contact: dict | None) -> None:
+    if not isinstance(contact, dict):
+        return
+
+    contact_id = contact.get("id")
+    if contact_id is None:
+        return
+
+    name = extract_contact_name(contact)
+    if not name:
+        return
+
+    runtime.contact_names[str(contact_id)] = name
+    runtime.pending_name_requests.discard(str(contact_id))
+
+
+async def request_user_name(runtime: AppRuntime, ws, sender_id) -> None:
+    sender_key = str(sender_id)
+    if sender_key in runtime.contact_names or sender_key in runtime.pending_name_requests:
+        return
+
     seq = await runtime.next_seq()
     payload = {"contactIds": [int(sender_id)]}
     request = {"ver": 11, "cmd": 0, "seq": seq, "opcode": 32, "payload": payload}
-    future = asyncio.get_event_loop().create_future()
-    runtime.pending_name_replies[seq] = future
+    runtime.pending_name_requests.add(sender_key)
 
     try:
         await ws.send_str(json.dumps(request))
     except Exception:
-        runtime.pending_name_replies.pop(seq, None)
-        future.cancel()
-        return str(sender_id)
-
-    try:
-        name = await asyncio.wait_for(future, timeout=5.0)
-        return name or str(sender_id)
-    except asyncio.TimeoutError:
-        runtime.pending_name_replies.pop(seq, None)
-        return str(sender_id)
+        runtime.pending_name_requests.discard(sender_key)
 
 
 def extract_from_message(message: dict | None):
@@ -296,11 +333,13 @@ async def process_group_message(
 
     text, attaches, original_sender, _original_msg_id = extract_from_message(msg)
 
-    sender_name = str(original_sender or msg.get("sender") or "")
+    lookup_sender = original_sender if original_sender is not None else msg.get("sender")
+    sender_name = str(lookup_sender or "")
     try:
-        lookup_sender = original_sender if original_sender is not None else msg.get("sender")
         if lookup_sender is not None:
-            sender_name = await request_user_name(runtime, ws, lookup_sender)
+            sender_name = runtime.contact_names.get(str(lookup_sender), sender_name)
+            if sender_name == str(lookup_sender):
+                await request_user_name(runtime, ws, lookup_sender)
     except Exception:
         pass
 
@@ -439,21 +478,18 @@ async def handle_incoming(runtime: AppRuntime, data: dict, ws, http_session: aio
     if opcode == 32:
         payload = data.get("payload", {}) or {}
         contacts = payload.get("contacts", []) or []
-        seq = data.get("seq")
-        if seq and seq in runtime.pending_name_replies:
-            name = None
-            if contacts:
-                contact = contacts[0]
-                name = (contact.get("names") or [{}])[0].get("name") or contact.get("id")
-            future = runtime.pending_name_replies.pop(seq, None)
-            if future and not future.done():
-                future.set_result(name)
+        for contact in contacts:
+            cache_contact_name(runtime, contact)
         return
 
     if opcode == 19:
         payload = data.get("payload", {}) or {}
         chats = payload.get("chats", []) or []
         messages_payload = payload.get("messages") or {}
+        profile = payload.get("profile", {}) or {}
+        cache_contact_name(runtime, profile.get("contact"))
+        for contact in payload.get("contacts", []) or []:
+            cache_contact_name(runtime, contact)
         print(f"opcode 19: получены данные аккаунта/чатов ({len(chats)} чатов)", flush=True)
         if messages_payload:
             await handle_sync_messages(runtime, messages_payload, ws, http_session)
@@ -689,6 +725,7 @@ async def ws_loop(runtime: AppRuntime) -> None:
                                 pass
                         runtime.pending_send_replies.clear()
                         runtime.pending_history_replies.clear()
+                        runtime.pending_name_requests.clear()
                         runtime.history_state.clear()
 
                         try:
@@ -727,3 +764,5 @@ async def ws_loop(runtime: AppRuntime) -> None:
                 print(f"Переподключение через {backoff} сек...", flush=True)
                 await asyncio.sleep(backoff)
                 backoff = min(max_backoff, backoff * 2)
+
+

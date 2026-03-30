@@ -54,6 +54,20 @@ def _env_optional_int(name: str, default: int | None) -> int | None:
         raise ValueError(f"Переменная окружения {name} должна быть числом или пустой, получено: {value!r}") from exc
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or value == "":
+        return default
+
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    raise ValueError(f"Invalid boolean value for {name}: {value!r}")
+
+
 def _env_int_set(name: str, default_values: Iterable[int]) -> set[int]:
     value = os.getenv(name)
     if value is None or value.strip() == "":
@@ -74,6 +88,8 @@ def _env_int_set(name: str, default_values: Iterable[int]) -> set[int]:
 @dataclass(slots=True)
 class Settings:
     telegram_bot_token: str
+    telegram_use_proxy: bool
+    telegram_proxy_url: str
     telegram_chat_id: str
     inline_allowed_chat_id: int | None
     admin_telegram_id: int | None
@@ -156,6 +172,8 @@ def load_settings(env_file: str | None = None) -> Settings:
 
     return Settings(
         telegram_bot_token=_env_str("TELEGRAM_BOT_TOKEN", ""),
+        telegram_use_proxy=_env_bool("TELEGRAM_USE_PROXY", False),
+        telegram_proxy_url=_env_str("TELEGRAM_PROXY_URL", ""),
         telegram_chat_id=_env_str("TELEGRAM_CHAT_ID", ""),
         inline_allowed_chat_id=_env_optional_int("INLINE_ALLOWED_CHAT_ID", None),
         admin_telegram_id=_env_optional_int("ADMIN_TELEGRAM_ID", None),
@@ -226,3 +244,5 @@ def validate_main_settings(settings: Settings) -> None:
             f"Не заполнены обязательные переменные окружения: {names}. "
             "Скопируйте .env.example в .env и укажите значения."
         )
+    if settings.telegram_use_proxy and not settings.telegram_proxy_url:
+        raise ValueError("If TELEGRAM_USE_PROXY=1, TELEGRAM_PROXY_URL must be set.")

@@ -1,0 +1,14 @@
+services:
+  telegram_proxy:
+    image: ghcr.io/tarampampam/3proxy:1.12.1
+    container_name: telegram_proxy
+    restart: unless-stopped
+    environment:
+      PROXY_LOGIN: ${PROXY_LOGIN}
+      PROXY_PASSWORD: ${PROXY_PASSWORD}
+      SOCKS_PORT: 1080
+      PRIMARY_RESOLVER: ${PRIMARY_RESOLVER:-1.1.1.1}
+      SECONDARY_RESOLVER: ${SECONDARY_RESOLVER:-8.8.8.8}
+      LOG_OUTPUT: /dev/stdout
+    ports:
+      - "1080:1080/tcp"

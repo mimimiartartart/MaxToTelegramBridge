@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass, field
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 
 from .persistence import load_last_active, load_seen_ids, load_telegram_outbox
 from .settings import Settings
@@ -20,7 +21,8 @@ class AppRuntime:
     last_active_prev: float
 
     reconnect_counter: int = 0
-    pending_name_replies: dict[int, asyncio.Future] = field(default_factory=dict)
+    contact_names: dict[str, str] = field(default_factory=dict)
+    pending_name_requests: set[str] = field(default_factory=set)
     seq_counter: int = 0
     seq_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     chat_titles: dict[str, str] = field(default_factory=dict)
@@ -41,8 +43,21 @@ class AppRuntime:
             return self.seq_counter
 
 
+def create_bot(settings: Settings) -> Bot:
+    session = None
+    if settings.telegram_use_proxy:
+        try:
+            session = AiohttpSession(proxy=settings.telegram_proxy_url)
+        except RuntimeError as exc:
+            raise RuntimeError(
+                "TELEGRAM_USE_PROXY=1, but proxy support is unavailable. Install aiohttp-socks."
+            ) from exc
+
+    return Bot(token=settings.telegram_bot_token, session=session)
+
+
 def create_runtime(settings: Settings) -> AppRuntime:
-    bot = Bot(token=settings.telegram_bot_token)
+    bot = create_bot(settings)
     dp = Dispatcher(bot=bot)
 
     seen_ids = load_seen_ids(settings.seen_ids_file)
@@ -62,4 +77,5 @@ def create_runtime(settings: Settings) -> AppRuntime:
         telegram_outbox=telegram_outbox,
         last_active_prev=last_active_prev,
     )
+
 
