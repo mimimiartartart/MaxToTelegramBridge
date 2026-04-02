@@ -90,6 +90,9 @@ class Settings:
     telegram_bot_token: str
     telegram_use_proxy: bool
     telegram_proxy_url: str
+    telegram_request_timeout: int
+    telegram_retry_base_delay: int
+    telegram_retry_max_delay: int
     telegram_chat_id: str
     inline_allowed_chat_id: int | None
     admin_telegram_id: int | None
@@ -174,6 +177,9 @@ def load_settings(env_file: str | None = None) -> Settings:
         telegram_bot_token=_env_str("TELEGRAM_BOT_TOKEN", ""),
         telegram_use_proxy=_env_bool("TELEGRAM_USE_PROXY", False),
         telegram_proxy_url=_env_str("TELEGRAM_PROXY_URL", ""),
+        telegram_request_timeout=_env_int("TELEGRAM_REQUEST_TIMEOUT", 20),
+        telegram_retry_base_delay=_env_int("TELEGRAM_RETRY_BASE_DELAY", 3),
+        telegram_retry_max_delay=_env_int("TELEGRAM_RETRY_MAX_DELAY", 60),
         telegram_chat_id=_env_str("TELEGRAM_CHAT_ID", ""),
         inline_allowed_chat_id=_env_optional_int("INLINE_ALLOWED_CHAT_ID", None),
         admin_telegram_id=_env_optional_int("ADMIN_TELEGRAM_ID", None),

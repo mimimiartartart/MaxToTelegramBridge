@@ -47,11 +47,16 @@ def create_bot(settings: Settings) -> Bot:
     session = None
     if settings.telegram_use_proxy:
         try:
-            session = AiohttpSession(proxy=settings.telegram_proxy_url)
+            session = AiohttpSession(
+                proxy=settings.telegram_proxy_url,
+                timeout=settings.telegram_request_timeout,
+            )
         except RuntimeError as exc:
             raise RuntimeError(
                 "TELEGRAM_USE_PROXY=1, but proxy support is unavailable. Install aiohttp-socks."
             ) from exc
+    else:
+        session = AiohttpSession(timeout=settings.telegram_request_timeout)
 
     return Bot(token=settings.telegram_bot_token, session=session)
 

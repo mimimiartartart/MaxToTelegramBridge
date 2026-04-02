@@ -8,6 +8,38 @@ from bridge.telegram_inline import cleanup_pending_sends, register_handlers
 from bridge.ws_bridge import send_text_via_ws, ws_loop
 
 
+async def telegram_polling_loop(runtime) -> None:
+    backoff = max(1, runtime.settings.telegram_retry_base_delay)
+    max_backoff = max(backoff, runtime.settings.telegram_retry_max_delay)
+
+    while True:
+        try:
+            print(
+                f"[TELEGRAM] запуск polling (timeout={runtime.settings.telegram_request_timeout}s)",
+                flush=True,
+            )
+            await runtime.dp.start_polling(
+                runtime.bot,
+                handle_signals=False,
+                close_bot_session=False,
+            )
+            print("[TELEGRAM] polling завершился, перезапускаю...", flush=True)
+            backoff = max(1, runtime.settings.telegram_retry_base_delay)
+            await runtime.bot.session.close()
+            await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"[TELEGRAM] polling ошибка: {exc}", flush=True)
+            try:
+                await runtime.bot.session.close()
+            except Exception:
+                pass
+            print(f"[TELEGRAM] повтор через {backoff} сек...", flush=True)
+            await asyncio.sleep(backoff)
+            backoff = min(max_backoff, backoff * 2)
+
+
 async def main() -> None:
     settings = load_settings()
     validate_main_settings(settings)
@@ -25,7 +57,7 @@ async def main() -> None:
     outbox_task = asyncio.create_task(telegram_outbox_worker(runtime))
     last_active_task = asyncio.create_task(last_active_writer(runtime))
 
-    polling_task = asyncio.create_task(runtime.dp.start_polling(runtime.bot))
+    polling_task = asyncio.create_task(telegram_polling_loop(runtime))
     ws_task = asyncio.create_task(ws_loop(runtime))
 
     try:
